@@ -1,0 +1,351 @@
+picam-frontend (1.0.0+202606231321) stable; urgency=medium
+
+  * Removed the drill-down view's "live"/connection status indicator
+    entirely (the small dot + text in the right panel).
+  * Fixed a real bug on the camera grid: each tile's status dot was
+    ALWAYS gray, regardless of whether the Pi was actually reachable.
+    setTileDot() looked up the dot element via getElementById(id)
+    using an id constructed from the Pi's name — but buildTile() runs
+    to completion (including that lookup) BEFORE the tile is ever
+    appended to the document by loadCameraGrid(), so the element
+    didn't exist in the DOM yet and the lookup silently returned null
+    every time. The dot's color literally never changed, in either
+    direction — there was no working green state and no red state at
+    all (a red/offline state had never existed in the CSS either).
+  * Fixed by holding a direct reference to the dot element inside
+    buildTile() and updating it via that reference instead of a DOM
+    lookup, removing the ordering dependency entirely. Added an
+    .offline class (reusing the existing --danger color already used
+    elsewhere in the UI) for the red state, alongside the existing
+    .live class for green.
+  * Verified against a real running backend with one reachable and
+    one unreachable Pi configured side by side: replayed the exact
+    fixed logic in Node against the live chain and confirmed the
+    working Pi resolves to the live/green class and the broken Pi
+    resolves to the offline/red class — not just that the code
+    compiles, but that the actual classification is correct.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 13:21:31 +0000
+
+picam-frontend (1.0.0+202606231309) stable; urgency=low
+
+  * Added a dedicated back button (top-left) shown only while in
+    pseudo-fullscreen. Unlike the existing fullscreen-toggle button
+    (bottom-right, hover-gated, flips state either direction), this
+    button is always visible during fullscreen and only ever exits —
+    a more discoverable, unambiguous way out, especially on touch
+    devices which have no hover state at all to reveal the existing
+    toggle button.
+  * Reuses the same ic-arrow-left icon already used for the camera
+    grid's back button, for visual consistency.
+  * Verified the served page: confirmed the button defaults to
+    display:none and only becomes visible via the
+    .viewer.pseudo-fullscreen .fs-back-btn rule, and confirmed its
+    position (top:12px, left:12px) cannot collide with the existing
+    bottom-right toggle button regardless of screen size.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 13:09:08 +0000
+
+picam-frontend (1.0.0+202606231256) stable; urgency=low
+
+  * Bottom bar layout changed: Stream, Lens, and Annotate are now
+    each on their own line instead of side-by-side in one row. On
+    each line the group label sits on the left and its buttons are
+    pushed to the right edge (justify-content: space-between).
+  * Removed the now-unused vertical divider elements between groups
+    — replaced with a thin border-top between rows. Buttons wrap to
+    a second line within their own row on narrow screens rather than
+    overflowing, since each row's nav still wraps independently.
+  * Verified the served page's actual CSS and group ordering rather
+    than just the source: confirmed flex-direction: column on the
+    bar, justify-content: space-between on each group, and the
+    Stream/Lens/Annotate rows render in that order.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 12:56:37 +0000
+
+picam-frontend (1.0.0+202606231250) stable; urgency=low
+
+  * Switching cameras (Lens) now shows the loading overlay over the
+    video and grays out every interactive drill-down control (Stream,
+    Lens, Annotate, both Overlay toggles) until the switch is actually
+    confirmed — not just sent. Previously only the Lens buttons
+    themselves were disabled, and there was no visual feedback on the
+    video at all.
+  * The confirmation signal is telemetry.active_camera from
+    /status.json actually matching the requested camera id — polled
+    on a short 300ms interval, separate from the regular slower
+    background status poll, with a 10s timeout. This is deliberately
+    NOT "first frame arrived" (a frame can arrive before picam-raw's
+    sensor switch has actually settled) and NOT a fixed delay.
+  * Added a .stream-btn:disabled CSS rule — buttons previously had no
+    visual change when .disabled was set via JS, only the toggle
+    switches did. Verified the rule applies cleanly alongside .active
+    (no overlapping CSS properties between the two, so a switching-
+    but-still-selected button correctly shows both its accent tint
+    AND a dimmed/disabled appearance at once).
+  * Verified end-to-end against a fake picam-raw that simulates a
+    realistic ~1.5s camera-switch delay before active_camera updates:
+    confirmed the polling logic correctly waits for the real
+    confirmation (1823ms measured) rather than resolving immediately
+    on the switch command's own response, and confirmed the timeout
+    path correctly resolves after the deadline rather than hanging.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 12:50:12 +0000
+
+picam-frontend (1.0.0+202606231244) stable; urgency=medium
+
+  * Fixed: fullscreen did not work on iOS. iOS Safari's
+    requestFullscreen()/webkitRequestFullscreen() only work on
+    <video> elements — calling them on any other element (including
+    the .viewer div this app uses, since MJPEG renders as an <img>,
+    not a <video>) silently does nothing. There is no iOS-specific
+    workaround for the native API on non-video elements.
+  * Replaced the native Fullscreen API entirely with a CSS-only
+    pseudo-fullscreen: a JS-toggled class that uses position: fixed
+    to fill the viewport. One code path on every platform — no
+    feature detection, no per-browser branching — so it now behaves
+    identically on iOS, Android, and desktop browsers alike, rather
+    than depending on an API with inconsistent support.
+  * Added an Escape-key handler to exit, since the native API
+    provided that automatically and this approach has to wire it up
+    manually. Exiting the drill-down view (back to the camera grid)
+    while pseudo-fullscreen was active is also now handled — it no
+    longer leaves the page scroll-locked.
+  * Verified the new markup/JS are present in the actual served page,
+    confirmed function hoisting makes showGrid's cleanup call to
+    setPseudoFullscreen safe despite the call appearing before the
+    function's definition in source order, and confirmed no leftover
+    native-Fullscreen-API code remains (only explanatory comments
+    referencing why it isn't used).
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 12:44:02 +0000
+
+picam-frontend (1.0.0+202606231006) stable; urgency=low
+
+  * Replaced the single Annotate toggle (which followed whichever
+    stream was currently selected) with two independent buttons —
+    Main and Lores — styled like the Lens buttons. Unlike Lens (where
+    selecting one camera deselects the other), both Annotate buttons
+    can be active simultaneously, since main_annotated and
+    lores_annotated have always been independent backend flags; the
+    UI just didn't expose them both before.
+  * Each button toggles only its own resolution's state on click and
+    syncs from its own status.json field on every poll, regardless of
+    which stream is currently being viewed in the player above.
+  * Verified all four combinations (both off, main-only, both-on,
+    lores-only) through the real proxy chain — confirmed via direct
+    backend queries and by replaying the exact client-side sync logic
+    against live status.json responses, not just code review.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 10:06:17 +0000
+
+picam-frontend (1.0.0+202606230748) stable; urgency=medium
+
+  * Major UI redesign: replaced the always-visible per-Pi sidebar list
+    with a single top-level "Cameras" nav item. Clicking it shows a
+    grid of thumbnail tiles, one per configured Pi.
+  * Each tile proactively checks that Pi's /status.json BEFORE
+    attempting any thumbnail stream. Reachable Pis show a live Lores
+    MJPEG thumbnail (low bandwidth, appropriate for a grid that may
+    have many tiles open at once); unreachable Pis show a "Not
+    available" icon instead of a broken-image flash.
+  * Clicking a tile drills down into that camera's full view. The
+    sidebar Pi list, Stream selector, Lens (camera 0/1), and Annotate
+    toggle that used to live in the left sidebar have moved into a
+    single bottom bar under the video. Stream info (date/time/lux/
+    camera) and the Overlay (OSD) toggles have moved to a right-hand
+    panel. A back button returns to the grid.
+  * Security hardening found while rebuilding: the tile footer used
+    to build HTML via string concatenation with the Pi's configured
+    label inserted directly into innerHTML — switched to DOM methods
+    (textContent) instead, removing any HTML-injection risk from a
+    config value. Pi names are also now sanitized before being used
+    as HTML element ids (previously assumed safe without checking).
+  * Verified end-to-end against real running services (not just
+    markup review): confirmed a Pi with no reachable backend
+    correctly classifies as unavailable via the same health-check
+    logic the browser runs, confirmed the drill-down's MJPEG stream
+    request returns correct multipart headers, and confirmed the
+    bottom-bar Annotate toggle and right-panel OSD toggle both reach
+    the real picam-orchestrator backend through the proxy chain.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Tue, 23 Jun 2026 07:48:07 +0000
+
+picam-frontend (1.0.0+202606221547) stable; urgency=medium
+
+  * Removed the "Annotated" stream button — only Main and Lores
+    remain as selectable streams, matching picam-orchestrator's
+    restructure. Added a new "Annotate" toggle that applies to
+    whichever resolution is currently selected, proxied through a new
+    /annotate?pi=X&lores=&main= route.
+  * The Annotate toggle's label and checked state both follow the
+    currently selected stream (lores_annotated or main_annotated from
+    status.json) — switching from Main to Lores updates the toggle to
+    reflect Lores's own independent annotation state.
+  * Verified the full three-tier chain: toggled annotation on Main
+    through the frontend's proxy, confirmed the change landed on the
+    real picam-orchestrator backend (queried directly, bypassing the
+    frontend), then toggled Lores independently and confirmed Main's
+    state was unaffected.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 15:47:35 +0000
+
+picam-frontend (1.0.0+202606221012) stable; urgency=medium
+
+  * Removed the Viewers row from the sidebar and the stream-header
+    meta line — clients (the per-Pi connection count) was not a
+    meaningful number to surface to end users and has been dropped
+    entirely rather than displayed.
+  * The "Camera" row in the sidebar now always shows the active
+    camera's numeric index (e.g. "0"), never picam-orchestrator's
+    configured display label/name.
+  * Split the Overlay toggle into two independent switches — "Camera
+    ID" and "Time" — matching picam-orchestrator's new independent
+    /osd?camera_id=&time= flags. Each toggle syncs from its own
+    status.json field (camera_id_enabled / time_enabled) with the
+    same optimistic-UI + pending-state guard already used elsewhere,
+    so a click updates instantly and only reverts if the backend
+    rejects it or the request fails.
+  * Updated the /osd proxy route to forward camera_id= and time=
+    independently (plus the legacy combined enabled= for backward
+    compatibility) instead of only ever forwarding enabled=.
+  * Verified the full three-tier proxy chain: toggling Camera ID
+    through the frontend leaves Time untouched on the real backend,
+    confirmed by querying picam-orchestrator directly rather than
+    trusting the frontend's own response.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 10:12:28 +0000
+
+picam-frontend (1.0.0+202606220935) stable; urgency=medium
+
+  * Updated the implicit default port for unqualified [pis] entries
+    (no :port given) from 80 to 81, matching picam-orchestrator's new
+    default. picam-frontend's own http_port remains 80 by default —
+    the two services now have non-overlapping defaults when run on
+    the same machine, resolving the port-collision bug fixed in the
+    previous release.
+  * Updated config.ini's documentation and example entries to match.
+  * Verified: an unqualified [pis] host entry now correctly resolves
+    to port 81 (confirmed via startup log output), not 80.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 09:35:55 +0000
+
+picam-frontend (1.0.0+202606220931) stable; urgency=high
+
+  * Fixed: bind() failure was never checked. When this frontend's
+    configured http_port (often 80) was already in use by another
+    process — including another picam service running on the same
+    machine — bind() failed but the code carried on to listen() on an
+    unbound socket anyway. Linux silently auto-binds that to a random
+    ephemeral port, so the process kept running and logged "Listening
+    on http://0.0.0.0:80" despite NOT actually listening there. A
+    browser hitting that port would then reach whatever else actually
+    held it, with no indication anything was wrong on this end.
+    Real-world case this exact bug caused: picam-orchestrator and
+    picam-frontend both configured for port 80 on the same Pi —
+    picam-orchestrator won the bind, picam-frontend silently moved to
+    an ephemeral port, and the browser's "Not found" 404 was actually
+    coming from picam-orchestrator's (correct, by design) lack of a
+    web route at "/", not from picam-frontend at all.
+  * Now checks bind()'s return value, logs a clear FATAL message
+    naming the exact port and OS error, suggests the diagnostic
+    command to find the conflicting process, and exits with status 1
+    instead of limping along on the wrong port. Verified by
+    reproducing a genuine port collision (two instances on the same
+    port): confirmed exit code 1 and the expected FATAL message.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 09:31:06 +0000
+
+picam-frontend (1.0.0+202606220901) stable; urgency=low
+
+  * Updated references from picam-stream to picam-orchestrator
+    (renamed backend package) — comments, config.ini documentation,
+    debian/control, and the loading-overlay hint text shown when a
+    backend takes a while to respond. No functional change; this
+    frontend always spoke plain HTTP and never depended on the
+    backend's package name.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 09:01:27 +0000
+
+picam-frontend (1.0.0+202606220858) stable; urgency=low
+
+  * Added a "Lens" section in the sidebar with Camera 0 / Camera 1
+    buttons, proxied through a new /camera?pi=X&id=N route to the
+    selected Pi's picam-stream backend (which itself relays to
+    picam-raw). Named distinctly from the existing "Camera" section
+    (which actually picks which Pi to view) to avoid confusion between
+    "which Pi" and "which lens on that Pi".
+  * Active camera selection syncs from telemetry.active_camera on each
+    status poll, with the same optimistic-UI + pending-state guard
+    already used for the OSD toggle — a click updates the UI
+    immediately, and reverts only if the backend rejects the switch
+    or the request fails outright.
+  * Verified the full three-tier proxy chain end-to-end (frontend ->
+    picam-stream -> a fake picam-raw CommandServer): confirmed a
+    switch request reaches picam-raw correctly and the response
+    relays back through both proxy layers unchanged, and that an
+    unknown ?pi= name is rejected with 404 before any backend call.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 08:58:49 +0000
+
+picam-frontend (1.0.0+202606220807) stable; urgency=low
+
+  * Renamed page title and sidebar branding from "PiCam Web" to
+    "PiCam".
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 08:07:43 +0000
+
+
+picam-frontend (1.0.0+202606220805) stable; urgency=low
+
+  * Sidebar Date/Time now shows the camera feed's embedded timestamp
+    (frame_ts_us from /status.json) instead of the viewer's browser
+    clock. Anchors to the latest value on each 3s status poll, then
+    ticks forward smoothly every second in between using
+    performance.now() as a monotonic elapsed-time reference — the
+    display updates every second rather than jumping only when a new
+    poll lands or freezing in between polls.
+  * Verified end-to-end against picam-stream's new frame_ts_us field:
+    confirmed the proxied value matches the backend's exactly, and
+    that the resulting displayed date reflects the camera feed's time
+    rather than today's real date.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 08:05:12 +0000
+
+picam-frontend (1.0.0+202606220744) stable; urgency=medium
+
+  * Added an Overlay toggle switch in the sidebar that turns the
+    camera-ID/timestamp burn-in on the selected Pi's stream on/off
+    instantly, via a new /osd?pi=X&enabled=true|false proxy route.
+    Mirrors picam-stream's matching runtime endpoint. The switch
+    syncs to the backend's actual reported state on every status
+    poll, so it stays accurate if another viewer or a config restart
+    changes it elsewhere.
+  * Security fix: added sanitizeForRequestLine(), which strips CR/LF
+    from any decoded query-param value before it's concatenated into
+    an outbound HTTP request line this frontend sends to a backend
+    Pi. Without this, a crafted request (e.g. a stream= or enabled=
+    value containing percent-encoded CRLF) could have injected
+    arbitrary extra header lines into the proxied backend request.
+    Applied to both the existing /stream proxy (stream= param) and
+    the new /osd proxy (enabled= param). Verified the stripping
+    behavior in isolation before shipping.
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Mon, 22 Jun 2026 07:44:47 +0000
+
+picam-frontend (1.0.0+202606200631) stable; urgency=low
+
+  * Initial release. Single web UI that proxies MJPEG streams and
+    status JSON from one or more picam-stream backends, letting a
+    browser view and switch between multiple Pis from one page.
+  * Pi list is static, configured in [pis] in config.ini.
+  * Browsers never connect directly to a Pi — only to this frontend,
+    which proxies the actual stream bytes through itself.
+  * Fixed a clean-shutdown bug caught during testing: close()ing the
+    listening socket does not reliably unblock a thread parked inside
+    accept() on that fd. Confirmed via gdb thread dump — the accept
+    thread stayed blocked even after close() ran, hanging the
+    destructor's join() forever. Fixed with shutdown(fd, SHUT_RDWR)
+    before close().
+
+ -- Jaco Hanekom <jhanekom@gmail.com>  Sat, 20 Jun 2026 06:31:51 +0000

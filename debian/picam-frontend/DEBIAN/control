@@ -1,0 +1,23 @@
+Package: picam-frontend
+Version: 1.0.0+202606231321
+Architecture: arm64
+Maintainer: Jaco Hanekom <jhanekom@gmail.com>
+Installed-Size: 142
+Depends: libc6 (>= 2.34), libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Section: web
+Priority: optional
+Description: Multi-Pi web viewer for picam-orchestrator backends
+ Single web UI that can view and switch between multiple picam-orchestrator
+ backends (one per Pi) from a single page. Proxies MJPEG frames and
+ status JSON through itself — browsers never connect directly to any
+ Pi, only to this frontend, which then reaches out to whichever
+ backend is currently selected.
+ .
+ Configure the list of Pis in /etc/picam-frontend/config.ini under
+ the [pis] section. Each Pi just needs picam-orchestrator installed and
+ reachable on the network; no other configuration is required on
+ the Pi side.
+ .
+ Open http://<this-host> in a browser to view.
+ .
+ Config: /etc/picam-frontend/config.ini

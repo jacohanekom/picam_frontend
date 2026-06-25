@@ -1,0 +1,5 @@
+4682b1ec9eb31273bbfb475ba515c6a5  lib/systemd/system/picam-frontend.service
+bb4d785d9b0f6012930fc1e8f3bc3f1b  usr/bin/picam_frontend
+e1dc7598fe184e1c61f794c7076737b0  usr/share/doc/picam-frontend/changelog.gz
+0e0cd2289aa81c9031f5acab3a2f877c  usr/share/doc/picam-frontend/copyright
+f3fdc71d72d0bb245863a4cf3ac3f648  usr/share/picam-frontend/web/index.html

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if ! id picam-frontend >/dev/null 2>&1; then
+    useradd -r -s /usr/sbin/nologin picam-frontend || true
+fi
+
+systemctl daemon-reload || true
+
+echo ""
+echo "picam-frontend installed."
+echo "  Edit config : /etc/picam-frontend/config.ini  (add your Pis under [pis])"
+echo "  Enable      : systemctl enable --now picam-frontend"
+echo "  View at     : http://<this-host>"

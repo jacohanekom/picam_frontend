@@ -1,0 +1,28 @@
+Source: picam-frontend
+Section: web
+Priority: optional
+Maintainer: Jaco Hanekom <jhanekom@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               cmake,
+               pkg-config
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: picam-frontend
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Multi-Pi web viewer for picam-orchestrator backends
+ Single web UI that can view and switch between multiple picam-orchestrator
+ backends (one per Pi) from a single page. Proxies MJPEG frames and
+ status JSON through itself — browsers never connect directly to any
+ Pi, only to this frontend, which then reaches out to whichever
+ backend is currently selected.
+ .
+ Configure the list of Pis in /etc/picam-frontend/config.ini under
+ the [pis] section. Each Pi just needs picam-orchestrator installed and
+ reachable on the network; no other configuration is required on
+ the Pi side.
+ .
+ Open http://<this-host> in a browser to view.
+ .
+ Config: /etc/picam-frontend/config.ini

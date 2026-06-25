@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PiCam</title>
+<style>
+  :root {
+    --bg:        #14161a;
+    --bg-panel:  #1b1e23;
+    --bg-hover:  #23262c;
+    --border:    #2c2f36;
+    --text:      #e8e9eb;
+    --text-dim:  #8b8f97;
+    --accent:    #3f8efc;
+    --accent-bg: rgba(63, 142, 252, 0.12);
+    --danger:    #e5534b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    height: 100%;
+  }
+  .icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Left sidebar: brand + top-level nav only ───────────────────────── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 4px;
+  }
+  .brand .icon {
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+  }
+  .brand span {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-dim);
+    padding: 0 4px;
+    margin-bottom: 8px;
+  }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 14px;
+    padding: 10px 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+  }
+  .nav-btn:hover { background: var(--bg-hover); color: var(--text); }
+  .nav-btn.active {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  /* ── Shared small-control styles (reused in the drill-down bottom bar
+     and right panel) ──────────────────────────────────────────────────── */
+  .stream-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+  }
+  .stream-nav.vertical { flex-direction: column; }
+  .stream-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s, color 0.12s;
+  }
+  .stream-nav.vertical .stream-btn { width: 100%; }
+  .stream-btn:hover { background: var(--bg-hover); color: var(--text); }
+  .stream-btn.active {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+  .stream-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+  }
+  .stream-btn:disabled:hover { background: transparent; color: var(--text-dim); }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+  .toggle-row .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .toggle-switch {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  .toggle-switch input:checked + .toggle-slider {
+    background: var(--accent);
+  }
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+  }
+  .toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .info-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .info-row + .info-row { border-top: 1px solid var(--border); }
+  .info-row .label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+  }
+  .info-row .label .icon { width: 15px; height: 15px; }
+  .info-row .value {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 0 4px;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .dot.live { background: #3ecf6e; }
+  .dot.offline { background: var(--danger); }
+
+  /* ── Main content area — holds EITHER the grid OR the drill-down ────── */
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 24px;
+  }
+  .content-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .content-header h1 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+  }
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  .back-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+  /* ── Camera grid ──────────────────────────────────────────────────────── */
+  .camera-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .camera-tile {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .camera-tile:hover { border-color: var(--accent); }
+  .camera-tile .thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .camera-tile .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .camera-tile .unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .camera-tile .unavailable .icon {
+    width: 28px;
+    height: 28px;
+    color: var(--danger);
+    opacity: 0.8;
+  }
+  .camera-tile .tile-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .camera-tile .tile-footer .tile-name {
+    font-weight: 500;
+  }
+  .camera-tile .tile-footer .dot { margin-right: 4px; }
+
+  /* ── Drill-down: viewer + bottom bar + right panel ───────────────────── */
+  .drilldown {
+    display: flex;
+    flex: 1;
+    gap: 20px;
+    min-height: 0;
+  }
+  .drilldown-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 16px;
+  }
+  .viewer {
+    width: 100%;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+    /* Without an explicit min-height, this container collapses to 0px
+       tall before the <img> has loaded any bytes (height:auto on an
+       image with no intrinsic size resolves to 0). */
+    min-height: 200px;
+  }
+  .viewer img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  /* Pseudo-fullscreen — a JS-toggled class rather than the native
+     Fullscreen API. iOS Safari does not support requestFullscreen()
+     on anything but <video> elements (it silently no-ops on a div),
+     so a CSS-only "fill the viewport" approach is used everywhere
+     for one consistent code path across all platforms, rather than
+     a real API that only works on some browsers. */
+  .viewer.pseudo-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+  .viewer.pseudo-fullscreen img {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100vh;
+    object-fit: contain;
+  }
+  /* Prevents the page behind from scrolling while the pseudo-fullscreen
+     overlay is open — same end result as what the native API gives for
+     free, but we have to do it ourselves here. */
+  body.pseudo-fullscreen-active {
+    overflow: hidden;
+  }
+  .fs-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 22, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    z-index: 101;
+  }
+  .fs-btn:hover { background: rgba(20, 22, 26, 0.9); }
+  .viewer:hover .fs-btn,
+  .fs-btn:focus-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .fs-btn { opacity: 1; }
+  }
+  /* Dedicated back button for pseudo-fullscreen — top-left, always
+     visible while fullscreen (not hover-gated like .fs-btn above,
+     since touch devices have no hover state at all and this needs
+     to be a reliably discoverable way out, not something you have
+     to already know to tap/hover to reveal). Hidden entirely outside
+     fullscreen. */
+  .fs-back-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 36px;
+    height: 36px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 22, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    z-index: 101;
+    transition: background 0.15s;
+  }
+  .fs-back-btn:hover { background: rgba(20, 22, 26, 0.9); }
+  .viewer.pseudo-fullscreen .fs-back-btn { display: flex; }
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--bg-panel);
+    color: var(--text-dim);
+    font-size: 13px;
+    min-height: 200px;
+  }
+  .loading-overlay.hidden { display: none; }
+  .spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Bottom bar: Stream + Lens + Annotate, all in one row */
+  .bottom-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 16px;
+  }
+  .bottom-bar .group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .bottom-bar .group + .group {
+    border-top: 1px solid var(--border);
+  }
+  .bottom-bar .group-label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .bottom-bar .group nav.stream-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  /* Right panel: stream info + overlay toggles */
+  .drilldown-side {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .menu-toggle {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 20;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    width: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .menu-toggle .icon { width: 20px; height: 20px; }
+  .overlay-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9;
+  }
+
+  @media (max-width: 860px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100%;
+      z-index: 10;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      width: 220px;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .overlay-bg.open { display: block; }
+    .menu-toggle { display: flex; }
+    .content { padding: 64px 16px 24px; }
+    .drilldown { flex-direction: column; }
+    .drilldown-side { width: 100%; }
+    .bottom-bar { gap: 14px; }
+  }
+</style>
+</head>
+<body>
+
+  <svg style="display:none" aria-hidden="true">
+    <symbol id="ic-calendar" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12" /> <path d="M16 3v4" /> <path d="M8 3v4" /> <path d="M4 11h16" /> <path d="M11 15h1" /> <path d="M12 15v3" /></symbol>
+    <symbol id="ic-camera" viewBox="0 0 24 24"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2" /> <path d="M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /></symbol>
+    <symbol id="ic-camera-ai" viewBox="0 0 24 24"><path d="M10 20h-5a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v2" /> <path d="M14.362 11.15a3 3 0 1 0 -4.144 4.263" /> <path d="M14 21v-4a2 2 0 1 1 4 0v4" /> <path d="M14 19h4" /> <path d="M21 15v6" /></symbol>
+    <symbol id="ic-clock" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /> <path d="M12 7v5l3 3" /></symbol>
+    <symbol id="ic-focus-2" viewBox="0 0 24 24"><path d="M11.5 12a.5 .5 0 1 0 1 0a.5 .5 0 1 0 -1 0" fill="currentColor" /> <path d="M5 12a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /> <path d="M12 3l0 2" /> <path d="M3 12l2 0" /> <path d="M12 19l0 2" /> <path d="M19 12l2 0" /></symbol>
+    <symbol id="ic-maximize" viewBox="0 0 24 24"><path d="M4 8v-2a2 2 0 0 1 2 -2h2" /> <path d="M4 16v2a2 2 0 0 0 2 2h2" /> <path d="M16 4h2a2 2 0 0 1 2 2v2" /> <path d="M16 20h2a2 2 0 0 0 2 -2v-2" /></symbol>
+    <symbol id="ic-menu-2" viewBox="0 0 24 24"><path d="M4 6l16 0" /> <path d="M4 12l16 0" /> <path d="M4 18l16 0" /></symbol>
+    <symbol id="ic-minimize" viewBox="0 0 24 24"><path d="M15 19v-2a2 2 0 0 1 2 -2h2" /> <path d="M15 5v2a2 2 0 0 0 2 2h2" /> <path d="M5 15h2a2 2 0 0 1 2 2v2" /> <path d="M5 9h2a2 2 0 0 0 2 -2v-2" /></symbol>
+    <symbol id="ic-sun" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /> <path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></symbol>
+    <symbol id="ic-users" viewBox="0 0 24 24"><path d="M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /> <path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /> <path d="M16 3.13a4 4 0 0 1 0 7.75" /> <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></symbol>
+    <symbol id="ic-video" viewBox="0 0 24 24"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4" /> <path d="M3 8a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -8" /></symbol>
+    <symbol id="ic-grid" viewBox="0 0 24 24"><path d="M4 4h6v6h-6z" /> <path d="M14 4h6v6h-6z" /> <path d="M4 14h6v6h-6z" /> <path d="M14 14h6v6h-6z" /></symbol>
+    <symbol id="ic-alert-triangle" viewBox="0 0 24 24"><path d="M12 9v4" /> <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.871l-8.106 -13.534a1.914 1.914 0 0 0 -3.274 0z" /> <path d="M12 16h.01" /></symbol>
+    <symbol id="ic-arrow-left" viewBox="0 0 24 24"><path d="M5 12l14 0" /> <path d="M5 12l6 6" /> <path d="M5 12l6 -6" /></symbol>
+  </svg>
+
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg class="icon" aria-hidden="true"><use href="#ic-menu-2"/></svg>
+  </button>
+  <div class="overlay-bg" id="overlayBg"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <svg class="icon" aria-hidden="true"><use href="#ic-camera-ai"/></svg>
+        <span>PiCam</span>
+      </div>
+
+      <div>
+        <div class="section-label">Menu</div>
+        <nav class="stream-nav vertical">
+          <button class="nav-btn active" id="navCameras">
+            <svg class="icon" aria-hidden="true"><use href="#ic-grid"/></svg>Cameras
+          </button>
+        </nav>
+      </div>
+    </aside>
+
+    <main class="content">
+
+      <!-- ══════════════════ Camera grid view ══════════════════ -->
+      <div id="gridView">
+        <div class="content-header">
+          <h1>Cameras</h1>
+        </div>
+        <div class="camera-grid" id="cameraGrid">
+          <!-- populated by JS from /pis.json + per-Pi health checks -->
+        </div>
+      </div>
+
+      <!-- ══════════════════ Drill-down (single camera) view ══════════════════ -->
+      <div id="drilldownView" style="display:none;">
+        <div class="content-header">
+          <button class="back-btn" id="backBtn">
+            <svg class="icon" aria-hidden="true"><use href="#ic-arrow-left"/></svg>Cameras
+          </button>
+          <h1 id="drilldownTitle">—</h1>
+        </div>
+
+        <div class="drilldown">
+          <div class="drilldown-main">
+            <div class="viewer" id="viewer">
+              <img id="streamImg" alt="live stream">
+              <div class="loading-overlay" id="loadingOverlay">
+                <span class="spinner"></span>
+                <span id="loadingText">Connecting…</span>
+              </div>
+              <button class="fs-back-btn" id="fsBackBtn" aria-label="Exit fullscreen">
+                <svg class="icon" aria-hidden="true"><use href="#ic-arrow-left"/></svg>
+              </button>
+              <button class="fs-btn" id="fsBtn" aria-label="Toggle fullscreen">
+                <svg class="icon" id="fsIcon" aria-hidden="true"><use href="#ic-maximize"/></svg>
+              </button>
+            </div>
+
+            <!-- Bottom bar: Stream + Lens + Annotate -->
+            <div class="bottom-bar">
+              <div class="group">
+                <span class="group-label">Stream</span>
+                <nav class="stream-nav">
+                  <button class="stream-btn" id="btn-main" data-stream="main">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-video"/></svg>Main
+                  </button>
+                  <button class="stream-btn" id="btn-lores" data-stream="lores">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-video"/></svg>Lores
+                  </button>
+                </nav>
+              </div>
+
+              <div class="group">
+                <span class="group-label">Lens</span>
+                <nav class="stream-nav" id="cameraNav">
+                  <button class="stream-btn" id="btn-cam0" data-camera="0">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-camera"/></svg>Camera 0
+                  </button>
+                  <button class="stream-btn" id="btn-cam1" data-camera="1">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-camera"/></svg>Camera 1
+                  </button>
+                </nav>
+              </div>
+
+              <div class="group">
+                <span class="group-label">Annotate</span>
+                <nav class="stream-nav" id="annotateNav">
+                  <button class="stream-btn" id="btn-annotate-main" data-resolution="main">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-focus-2"/></svg>Main
+                  </button>
+                  <button class="stream-btn" id="btn-annotate-lores" data-resolution="lores">
+                    <svg class="icon" aria-hidden="true"><use href="#ic-focus-2"/></svg>Lores
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right panel: stream info + overlay toggles -->
+          <aside class="drilldown-side">
+            <div>
+              <div class="section-label">Stream info</div>
+              <div class="info-card">
+                <div class="info-row">
+                  <span class="label"><svg class="icon" aria-hidden="true"><use href="#ic-calendar"/></svg>Date</span>
+                  <span class="value" id="info-date">—</span>
+                </div>
+                <div class="info-row">
+                  <span class="label"><svg class="icon" aria-hidden="true"><use href="#ic-clock"/></svg>Time</span>
+                  <span class="value" id="info-time">—</span>
+                </div>
+                <div class="info-row">
+                  <span class="label"><svg class="icon" aria-hidden="true"><use href="#ic-sun"/></svg>Lux</span>
+                  <span class="value" id="info-lux">—</span>
+                </div>
+                <div class="info-row">
+                  <span class="label"><svg class="icon" aria-hidden="true"><use href="#ic-camera"/></svg>Camera</span>
+                  <span class="value" id="info-camera">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-label">Overlay</div>
+              <div class="toggle-row">
+                <span class="toggle-label">
+                  <svg class="icon" aria-hidden="true"><use href="#ic-camera"/></svg>
+                  Camera ID
+                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="osdCameraToggle">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">
+                  <svg class="icon" aria-hidden="true"><use href="#ic-clock"/></svg>
+                  Time
+                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="osdTimeToggle">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <script>
+    // ── Element references ────────────────────────────────────────────────
+    const sidebar    = document.getElementById('sidebar');
+    const overlayBg   = document.getElementById('overlayBg');
+    const menuToggle  = document.getElementById('menuToggle');
+    const navCameras  = document.getElementById('navCameras');
+
+    const gridView      = document.getElementById('gridView');
+    const drilldownView = document.getElementById('drilldownView');
+    const cameraGrid    = document.getElementById('cameraGrid');
+    const backBtn       = document.getElementById('backBtn');
+    const drilldownTitle = document.getElementById('drilldownTitle');
+
+    const buttons   = document.querySelectorAll('#drilldownView .stream-btn[data-stream]');
+    const img       = document.getElementById('streamImg');
+    const viewer    = document.getElementById('viewer');
+    const fsBtn     = document.getElementById('fsBtn');
+    const fsBackBtn = document.getElementById('fsBackBtn');
+    const fsIconUse = document.querySelector('#fsIcon use');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingText    = document.getElementById('loadingText');
+    const osdCameraToggle = document.getElementById('osdCameraToggle');
+    const osdTimeToggle   = document.getElementById('osdTimeToggle');
+    const cameraNav = document.getElementById('cameraNav');
+    const cameraButtons = cameraNav.querySelectorAll('.stream-btn');
+    const annotateNav = document.getElementById('annotateNav');
+    const annotateButtons = annotateNav.querySelectorAll('.stream-btn');
+
+    const titles = { main: 'Main', lores: 'Lores' };
+
+    // Track which Pi + stream the drill-down view is watching — both
+    // encoded in the img src URL so the frontend knows which backend and
+    // feed to proxy.
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentPi     = urlParams.get('pi') || '';
+    let currentStream = urlParams.get('stream') || 'main';
+    let currentCamera = null;  // unknown until the first /status.json poll reports active_camera
+    let slowHintTimer = null;
+    let pisCache = [];          // last loaded /pis.json result
+    let pollTimer = null;       // drill-down status polling, only runs while drilled in
+    let inDrilldown = false;
+
+    // ── Sidebar (mobile drawer) ──────────────────────────────────────────
+    function openSidebar()  { sidebar.classList.add('open');  overlayBg.classList.add('open'); }
+    function closeSidebar() { sidebar.classList.remove('open'); overlayBg.classList.remove('open'); }
+    menuToggle.addEventListener('click', openSidebar);
+    overlayBg.addEventListener('click', closeSidebar);
+
+    // ── View switching: grid <-> drill-down ──────────────────────────────
+    function showGrid() {
+      inDrilldown = false;
+      drilldownView.style.display = 'none';
+      gridView.style.display = '';
+      img.src = '';  // stop the drill-down stream connection
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      setPseudoFullscreen(false);  // don't leave the overlay/scroll-lock stuck on
+      // Update the URL without a reload, so back/forward + reload land
+      // on the grid rather than re-opening whatever was last viewed.
+      history.replaceState(null, '', window.location.pathname);
+      loadCameraGrid();
+    }
+
+    function showDrilldown(piName, stream) {
+      inDrilldown = true;
+      currentPi = piName;
+      currentStream = stream || currentStream || 'main';
+      gridView.style.display = 'none';
+      drilldownView.style.display = '';
+      const pi = pisCache.find(p => p.name === piName);
+      drilldownTitle.textContent = pi ? pi.label : piName;
+      history.replaceState(null, '', '?pi=' + encodeURIComponent(piName) +
+                                      '&stream=' + encodeURIComponent(currentStream));
+      setActiveStream(currentStream);
+      reloadStream();
+      if (!pollTimer) pollTimer = setInterval(pollStatus, 3000);
+      pollStatus();
+      closeSidebar();
+    }
+
+    navCameras.addEventListener('click', showGrid);
+    backBtn.addEventListener('click', showGrid);
+
+    // ── Camera grid ───────────────────────────────────────────────────────
+    // Each tile proactively checks /status.json for that Pi BEFORE
+    // attempting any thumbnail stream — an unreachable Pi shows an
+    // "unavailable" icon immediately rather than a broken-image flash
+    // from a failed MJPEG connection.
+    async function buildTile(pi) {
+      const tile = document.createElement('div');
+      tile.className = 'camera-tile';
+      tile.dataset.pi = pi.name;
+
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+
+      const footer = document.createElement('div');
+      footer.className = 'tile-footer';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'tile-name';
+      nameSpan.textContent = pi.label;  // textContent, not innerHTML — avoids any
+                                        // HTML injection risk from a config value
+      const pillSpan = document.createElement('span');
+      pillSpan.className = 'status-pill';
+      const dotSpan = document.createElement('span');
+      dotSpan.className = 'dot';
+      pillSpan.appendChild(dotSpan);
+      footer.appendChild(nameSpan);
+      footer.appendChild(pillSpan);
+
+      tile.appendChild(thumb);
+      tile.appendChild(footer);
+      tile.addEventListener('click', () => showDrilldown(pi.name, 'main'));
+
+      // Operate directly on dotSpan rather than looking it up via
+      // getElementById by a constructed id — the previous version did
+      // that lookup BEFORE this tile was ever appended to the document
+      // (buildTile runs to completion, including this whole block,
+      // before loadCameraGrid appends its return value), so
+      // getElementById always returned null and the dot never actually
+      // changed color at all — every tile silently stayed the default
+      // gray regardless of whether the Pi was reachable.
+      function setDot(live) {
+        dotSpan.classList.toggle('live', live);
+        dotSpan.classList.toggle('offline', !live);
+      }
+
+      try {
+        const resp = await fetch('/status.json?pi=' + encodeURIComponent(pi.name), { cache: 'no-store' });
+        if (!resp.ok) throw new Error('bad status');
+        await resp.json();  // confirms the backend actually returned valid JSON
+
+        // Reachable — show a live Lores thumbnail (small, low bandwidth,
+        // appropriate for a grid that may have many tiles at once).
+        const thumbImg = document.createElement('img');
+        thumbImg.alt = pi.label;
+        thumbImg.src = '/stream?pi=' + encodeURIComponent(pi.name) + '&stream=lores';
+        thumbImg.onerror = () => { showUnavailable(thumb); setDot(false); };
+        thumb.appendChild(thumbImg);
+        setDot(true);
+      } catch (e) {
+        showUnavailable(thumb);
+        setDot(false);
+      }
+
+      return tile;
+    }
+
+    function showUnavailable(thumbEl) {
+      thumbEl.innerHTML =
+        '<div class="unavailable">' +
+        '<svg class="icon" aria-hidden="true"><use href="#ic-alert-triangle"/></svg>' +
+        '<span>Not available</span></div>';
+    }
+
+    async function loadCameraGrid() {
+      cameraGrid.innerHTML = '';
+      try {
+        const resp = await fetch('/pis.json');
+        pisCache = await resp.json();
+        if (pisCache.length === 0) {
+          cameraGrid.innerHTML =
+            '<div style="color:var(--text-dim);font-size:13px;">No cameras configured.</div>';
+          return;
+        }
+        for (const pi of pisCache) {
+          const tile = await buildTile(pi);
+          cameraGrid.appendChild(tile);
+        }
+      } catch (e) {
+        cameraGrid.innerHTML =
+          '<div style="color:var(--text-dim);font-size:13px;">Could not load camera list.</div>';
+      }
+    }
+
+    // ── Drill-down: loading overlay ──────────────────────────────────────
+    function showLoading() {
+      loadingOverlay.classList.remove('hidden');
+      loadingText.textContent = 'Connecting…';
+      clearTimeout(slowHintTimer);
+      slowHintTimer = setTimeout(() => {
+        loadingText.textContent = 'Still waiting — check the Pi is reachable and picam-orchestrator is running';
+      }, 5000);
+    }
+    function hideLoading() {
+      loadingOverlay.classList.add('hidden');
+      clearTimeout(slowHintTimer);
+    }
+
+    // ── Drill-down: stream selection ──────────────────────────────────────
+    function setActiveStream(stream) {
+      currentStream = stream;
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.stream === stream));
+    }
+
+    function reloadStream() {
+      showLoading();
+      img.src = '/stream?pi=' + encodeURIComponent(currentPi) +
+                '&stream=' + encodeURIComponent(currentStream);
+    }
+
+    function selectStream(stream) {
+      setActiveStream(stream);
+      reloadStream();
+    }
+    buttons.forEach(b => b.addEventListener('click', () => selectStream(b.dataset.stream)));
+    img.addEventListener('load', hideLoading);
+
+    // On error, reconnect to the same Pi + stream (only while drilled in).
+    img.onerror = () => {
+      if (!inDrilldown) return;
+      showLoading();
+      setTimeout(() => {
+        if (!inDrilldown) return;
+        img.src = '/stream?pi=' + encodeURIComponent(currentPi) +
+                  '&stream=' + encodeURIComponent(currentStream) + '&_=' + Date.now();
+      }, 1000);
+    };
+
+    // ── Drill-down: Lens (camera 0/1) ─────────────────────────────────────
+    function setActiveCamera(cameraId) {
+      currentCamera = String(cameraId);
+      cameraButtons.forEach(b => b.classList.toggle('active', b.dataset.camera === currentCamera));
+    }
+
+    // All interactive drill-down controls except fullscreen/back — those
+    // two don't depend on camera state, so disabling them would just be
+    // an unnecessary restriction on navigating away while a switch is
+    // pending. Reused for the camera-switch grayout below.
+    function allDrilldownControls() {
+      return [...buttons, ...cameraButtons, ...annotateButtons, osdCameraToggle, osdTimeToggle];
+    }
+
+    function setControlsDisabled(disabled) {
+      allDrilldownControls().forEach(el => { el.disabled = disabled; });
+    }
+
+    // Polls /status.json on a short interval (not the regular slow
+    // background pollStatus) until telemetry.active_camera actually
+    // equals the requested id — that is the real confirmation a switch
+    // has taken effect, not "a frame arrived" (a frame can arrive before
+    // picam-raw's sensor switch has actually settled) and not a fixed
+    // timer (which would either be too short on a slow switch or feel
+    // sluggish on a fast one). Resolves true on confirmation, false on
+    // timeout.
+    function waitForActiveCamera(cameraId, timeoutMs = 10000, intervalMs = 300) {
+      const targetCamera = String(cameraId);
+      const deadline = Date.now() + timeoutMs;
+      return new Promise((resolve) => {
+        async function check() {
+          if (!inDrilldown) { resolve(false); return; }
+          try {
+            const resp = await fetch('/status.json?pi=' + encodeURIComponent(currentPi));
+            const data = await resp.json();
+            const active = data.telemetry && data.telemetry.active_camera;
+            if (typeof active === 'number' && String(active) === targetCamera) {
+              resolve(true);
+              return;
+            }
+          } catch (e) {
+            // transient fetch failure — keep retrying until the deadline
+          }
+          if (Date.now() >= deadline) { resolve(false); return; }
+          setTimeout(check, intervalMs);
+        }
+        check();
+      });
+    }
+
+    // Switching cameras does NOT reload the stream connection itself —
+    // picam-raw switches its active sensor and picam-orchestrator keeps
+    // encoding from whichever UDP frames arrive next, so the existing
+    // /stream connection just starts showing the new camera's frames on
+    // its own. What we DO need to wait for is picam-raw's own
+    // confirmation that the switch actually took effect (see
+    // waitForActiveCamera above) — only then is the loading state cleared.
+    async function selectCamera(cameraId) {
+      if (!currentPi) return;
+      const previousCamera = currentCamera;
+      setActiveCamera(cameraId);
+      cameraNav.dataset.pending = '1';
+      showLoading();
+      setControlsDisabled(true);
+      try {
+        const resp = await fetch('/camera?pi=' + encodeURIComponent(currentPi) +
+                                  '&id=' + encodeURIComponent(cameraId));
+        const data = await resp.json();
+        if (!data.ok) {
+          setActiveCamera(previousCamera);
+          return;
+        }
+        const confirmed = await waitForActiveCamera(cameraId);
+        if (!confirmed) {
+          // picam-raw never confirmed the switch within the timeout —
+          // leave the UI showing what was actually requested rather than
+          // silently reverting, since the switch command itself DID
+          // succeed (data.ok was true); only the confirmation poll timed
+          // out. The next regular background poll will correct the UI
+          // if the camera turns out to still be on the old index.
+          loadingText.textContent = 'Switch sent, but not yet confirmed';
+        }
+      } catch (e) {
+        setActiveCamera(previousCamera);
+      } finally {
+        setControlsDisabled(false);
+        hideLoading();
+        delete cameraNav.dataset.pending;
+      }
+    }
+    cameraButtons.forEach(b => b.addEventListener('click', () => selectCamera(b.dataset.camera)));
+
+    // ── Drill-down: OSD toggles (Camera ID / Time) ───────────────────────
+    // Toggling sends the change to the backend immediately, but the
+    // checkbox state shown to the user is held ("pending") until the
+    // backend confirms it — this stops the 3-second status poll from
+    // snapping the switch back to its old position while the request
+    // for this click is still in flight.
+    function wireOsdToggle(toggleEl, queryParamName, responseFieldName) {
+      toggleEl.addEventListener('change', async () => {
+        if (!currentPi) { toggleEl.checked = !toggleEl.checked; return; }
+        const wanted = toggleEl.checked;
+        toggleEl.dataset.pending = '1';
+        toggleEl.disabled = true;
+        try {
+          const resp = await fetch('/osd?pi=' + encodeURIComponent(currentPi) +
+                                    '&' + queryParamName + '=' + (wanted ? 'true' : 'false'));
+          const data = await resp.json();
+          if (typeof data[responseFieldName] === 'boolean') {
+            toggleEl.checked = data[responseFieldName];
+          } else {
+            toggleEl.checked = !wanted;
+          }
+        } catch (e) {
+          toggleEl.checked = !wanted;
+        } finally {
+          toggleEl.disabled = false;
+          delete toggleEl.dataset.pending;
+        }
+      });
+    }
+    wireOsdToggle(osdCameraToggle, 'camera_id', 'camera_id_enabled');
+    wireOsdToggle(osdTimeToggle,   'time',      'time_enabled');
+
+    // ── Drill-down: Annotate buttons (Main, Lores — independently toggleable) ──
+    // Unlike Lens (where clicking selects ONE camera exclusively), each
+    // Annotate button represents its OWN resolution's annotation state —
+    // both can be active, both off, or just one. A click toggles only
+    // that button's own .active class and sends only that resolution's
+    // flag to the backend; the other resolution's state is untouched.
+    async function toggleAnnotate(btn) {
+      if (!currentPi) return;
+      const resolution = btn.dataset.resolution;  // 'main' or 'lores'
+      const responseField = resolution + '_annotated';
+      const wanted = !btn.classList.contains('active');
+
+      btn.dataset.pending = '1';
+      btn.disabled = true;
+      btn.classList.toggle('active', wanted);  // optimistic UI
+      try {
+        const resp = await fetch('/annotate?pi=' + encodeURIComponent(currentPi) +
+                                  '&' + resolution + '=' + (wanted ? 'true' : 'false'));
+        const data = await resp.json();
+        if (typeof data[responseField] === 'boolean') {
+          btn.classList.toggle('active', data[responseField]);
+        } else {
+          btn.classList.toggle('active', !wanted);  // unexpected response — revert
+        }
+      } catch (e) {
+        btn.classList.toggle('active', !wanted);  // request failed — revert
+      } finally {
+        btn.disabled = false;
+        delete btn.dataset.pending;
+      }
+    }
+    annotateButtons.forEach(b => b.addEventListener('click', () => toggleAnnotate(b)));
+
+    // ── Pseudo-fullscreen ─────────────────────────────────────────────────
+    // Deliberately NOT using the native Fullscreen API. iOS Safari does
+    // not support requestFullscreen() on anything other than <video>
+    // elements — it silently no-ops on a div, which is exactly what our
+    // .viewer is (it wraps an <img>, since MJPEG renders as an image, not
+    // a video element). Rather than special-case iOS with a different
+    // code path, this uses one CSS class (position: fixed, fills the
+    // viewport) on every platform — simpler, and behaves identically
+    // everywhere instead of depending on a native API with inconsistent
+    // browser support.
+    let pseudoFullscreen = false;
+
+    function setPseudoFullscreen(on) {
+      pseudoFullscreen = on;
+      viewer.classList.toggle('pseudo-fullscreen', on);
+      document.body.classList.toggle('pseudo-fullscreen-active', on);
+      fsIconUse.setAttribute('href', on ? '#ic-minimize' : '#ic-maximize');
+    }
+    function toggleFullscreen() {
+      setPseudoFullscreen(!pseudoFullscreen);
+    }
+    fsBtn.addEventListener('click', toggleFullscreen);
+    // Dedicated back button — always exits (never toggles back in),
+    // unlike fsBtn which flips state either direction. A back button
+    // that sometimes re-enters fullscreen instead of exiting would be
+    // a confusing affordance.
+    fsBackBtn.addEventListener('click', () => setPseudoFullscreen(false));
+    viewer.addEventListener('dblclick', toggleFullscreen);
+    // Escape is a standard expectation for exiting fullscreen on desktop
+    // — the native API provided this automatically; we have to wire it
+    // up ourselves now that we're not using that API.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pseudoFullscreen) setPseudoFullscreen(false);
+    });
+
+    // ── Camera-feed clock (NOT the viewer's browser clock) ───────────────
+    let frameClockAnchorMs = null;
+    let receivedAtMs = null;
+
+    function setFrameClockAnchor(frameTsUs) {
+      if (!frameTsUs) return;
+      frameClockAnchorMs = frameTsUs / 1000;
+      receivedAtMs = performance.now();
+    }
+
+    function updateClock() {
+      const dateEl = document.getElementById('info-date');
+      const timeEl = document.getElementById('info-time');
+      if (!dateEl || !timeEl) return;
+      if (frameClockAnchorMs === null) {
+        dateEl.textContent = '—';
+        timeEl.textContent = '—';
+        return;
+      }
+      const elapsed = performance.now() - receivedAtMs;
+      const now = new Date(frameClockAnchorMs + elapsed);
+      dateEl.textContent =
+        now.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      timeEl.textContent =
+        now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // ── Drill-down status polling ─────────────────────────────────────────
+    async function pollStatus() {
+      if (!inDrilldown || !currentPi) return;
+      try {
+        const resp = await fetch('/status.json?pi=' + encodeURIComponent(currentPi));
+        const data = await resp.json();
+
+        setFrameClockAnchor(data.frame_ts_us);
+        updateClock();
+
+        if (typeof data.camera_id_enabled === 'boolean' && !osdCameraToggle.dataset.pending) {
+          osdCameraToggle.checked = data.camera_id_enabled;
+        }
+        if (typeof data.time_enabled === 'boolean' && !osdTimeToggle.dataset.pending) {
+          osdTimeToggle.checked = data.time_enabled;
+        }
+
+        // Both Annotate buttons sync from their OWN field — main_annotated
+        // / lores_annotated — independent of whichever stream is currently
+        // being viewed, since each button represents its resolution's own
+        // state, not "annotation for the stream you happen to be watching".
+        annotateButtons.forEach(btn => {
+          const field = btn.dataset.resolution + '_annotated';
+          if (typeof data[field] === 'boolean' && !btn.dataset.pending) {
+            btn.classList.toggle('active', data[field]);
+          }
+        });
+
+        const t = data.telemetry || {};
+        document.getElementById('info-lux').textContent =
+          (typeof t.lux === 'number' && t.lux >= 0) ? Math.round(t.lux) + ' lx' : '—';
+        document.getElementById('info-camera').textContent =
+          (typeof t.active_camera === 'number') ? String(t.active_camera) : '—';
+
+        if (typeof t.active_camera === 'number' && !cameraNav.dataset.pending) {
+          setActiveCamera(t.active_camera);
+        }
+      } catch (e) {
+        // status poll failed — nothing to update here now that the
+        // drill-down's connection indicator has been removed; the
+        // sidebar info fields just keep showing their last-known values.
+      }
+    }
+
+    // ── Startup ───────────────────────────────────────────────────────────
+    setInterval(updateClock, 1000);
+
+    if (currentPi) {
+      // A pi was specified in the URL on load — go straight to the
+      // drill-down for it rather than showing the grid first.
+      fetch('/pis.json').then(r => r.json()).then(pis => {
+        pisCache = pis;
+        showDrilldown(currentPi, currentStream);
+      }).catch(() => { showGrid(); });
+    } else {
+      showGrid();
+    }
+  </script>
+</body>
+</html>

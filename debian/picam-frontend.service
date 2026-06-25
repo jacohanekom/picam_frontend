@@ -1,0 +1,24 @@
+[Unit]
+Description=Multi-Pi web viewer for picam-orchestrator backends
+After=network.target
+
+[Service]
+Type=simple
+User=picam-frontend
+Group=picam-frontend
+
+# Grants just enough privilege to bind port 80 without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+ExecStart=/usr/bin/picam_frontend --config /etc/picam-frontend/config.ini
+
+Restart=on-failure
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=picam-frontend
+
+[Install]
+WantedBy=multi-user.target

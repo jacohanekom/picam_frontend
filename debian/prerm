@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+systemctl stop    picam-frontend 2>/dev/null || true
+systemctl disable picam-frontend 2>/dev/null || true
