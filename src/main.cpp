@@ -3,9 +3,11 @@
  * ==============
  * Single web UI for viewing one or more picam-orchestrator backends (each
  * running on its own Pi). Reads a static list of Pi addresses from
- * config, serves the browser page, and proxies MJPEG frames + status
- * JSON from whichever Pi+stream the viewer has selected — the browser
- * only ever talks to this one process, never directly to a Pi.
+ * config, serves the browser page, and proxies the multipart WebP stream
+ * (formerly MJPEG — picam-orchestrator switched codecs, this proxy is a
+ * pure byte relay so it didn't need to change) + status JSON from
+ * whichever Pi+stream the viewer has selected — the browser only ever
+ * talks to this one process, never directly to a Pi.
  *
  * Routes:
  *   GET /                          → web UI
@@ -205,11 +207,13 @@ static bool fetchBackendJson(const PiBackend& pi, const std::string& path,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Proxy: relay an MJPEG /stream connection from a backend straight through
-// to the browser. This thread blocks for the entire lifetime of the
-// connection, reading from the backend and writing to the browser — a
-// pure byte pump, no decoding/re-encoding. Exits cleanly when either side
-// closes or errors.
+// Proxy: relay a /stream connection from a backend straight through to the
+// browser. This thread blocks for the entire lifetime of the connection,
+// reading from the backend and writing to the browser — a pure byte pump,
+// no decoding/re-encoding, so it doesn't care what image codec the
+// backend's multipart frames are actually using (WebP as of
+// picam-orchestrator's MJPEG→WebP switch; previously JPEG). Exits cleanly
+// when either side closes or errors.
 // ─────────────────────────────────────────────────────────────────────────────
 static void proxyStream(const PiBackend& pi, const std::string& stream, int browserFd) {
     int backendFd = http::connectWithTimeout(pi.host, pi.port, 3000);

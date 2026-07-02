@@ -13,10 +13,11 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Multi-Pi web viewer for picam-orchestrator backends
  Single web UI that can view and switch between multiple picam-orchestrator
- backends (one per Pi) from a single page. Proxies MJPEG frames and
- status JSON through itself — browsers never connect directly to any
- Pi, only to this frontend, which then reaches out to whichever
- backend is currently selected.
+ backends (one per Pi) from a single page. Proxies the live multipart
+ WebP stream and status JSON through itself as a pure byte relay
+ (codec-agnostic — it never decodes or re-encodes frames) — browsers
+ never connect directly to any Pi, only to this frontend, which then
+ reaches out to whichever backend is currently selected.
  .
  Configure the list of Pis in /etc/picam-frontend/config.ini under
  the [pis] section. Each Pi just needs picam-orchestrator installed and

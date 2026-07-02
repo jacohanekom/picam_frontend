@@ -803,7 +803,7 @@
     // Each tile proactively checks /status.json for that Pi BEFORE
     // attempting any thumbnail stream — an unreachable Pi shows an
     // "unavailable" icon immediately rather than a broken-image flash
-    // from a failed MJPEG connection.
+    // from a failed stream connection.
     async function buildTile(pi) {
       const tile = document.createElement('div');
       tile.className = 'camera-tile';
@@ -1096,9 +1096,9 @@
     // Deliberately NOT using the native Fullscreen API. iOS Safari does
     // not support requestFullscreen() on anything other than <video>
     // elements — it silently no-ops on a div, which is exactly what our
-    // .viewer is (it wraps an <img>, since MJPEG renders as an image, not
-    // a video element). Rather than special-case iOS with a different
-    // code path, this uses one CSS class (position: fixed, fills the
+    // .viewer is (it wraps an <img>, since the stream renders as a plain
+    // image, not a video element). Rather than special-case iOS with a
+    // different code path, this uses one CSS class (position: fixed, fills the
     // viewport) on every platform — simpler, and behaves identically
     // everywhere instead of depending on a native API with inconsistent
     // browser support.

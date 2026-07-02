@@ -1,10 +1,10 @@
 # picam-frontend
 
-A web UI for viewing and controlling multiple Raspberry Pi cameras. The browser talks exclusively to picam-frontend, which proxies all traffic (MJPEG streams, status JSON, control commands) to the backend Pis running [picam-orchestrator](https://github.com).
+A web UI for viewing and controlling multiple Raspberry Pi cameras. The browser talks exclusively to picam-frontend, which proxies all traffic (live video streams, status JSON, control commands) to the backend Pis running [picam-orchestrator](https://github.com).
 
 ## Features
 
-- Live MJPEG stream grid — see all cameras at a glance
+- Live stream grid — see all cameras at a glance (multipart WebP, proxied byte-for-byte from picam-orchestrator; picam-frontend never decodes or re-encodes frames, so it works unchanged regardless of which image codec the backend uses)
 - Drill-down view with full-resolution stream and telemetry
 - Switch between main/lores streams and dual-lens cameras (Camera 0/1)
 - Toggle camera ID and timestamp overlays (OSD)
@@ -69,7 +69,7 @@ The frontend exposes these endpoints, which the single-page app calls internally
 |---|---|
 | `GET /` | Serves `index.html` |
 | `GET /pis.json` | JSON array of configured Pi objects |
-| `GET /stream?pi=X&stream=Y` | Proxied MJPEG stream from Pi X |
+| `GET /stream?pi=X&stream=Y` | Proxied multipart WebP stream from Pi X |
 | `GET /status.json?pi=X` | Proxied telemetry JSON from Pi X |
 | `GET /camera?pi=X&id=N` | Switch camera lens on Pi X |
 | `GET /osd?pi=X&camera_id=true/false&time=true/false` | Toggle OSD overlays |
