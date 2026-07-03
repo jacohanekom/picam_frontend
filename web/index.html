@@ -342,11 +342,11 @@
     border: 1px solid var(--border);
     position: relative;
     /* Without an explicit min-height, this container collapses to 0px
-       tall before the <img> has loaded any bytes (height:auto on an
-       image with no intrinsic size resolves to 0). */
+       tall before the <video> has any frames (height:auto on a video
+       with no intrinsic size yet resolves to 0). */
     min-height: 200px;
   }
-  .viewer img {
+  .viewer video {
     display: block;
     width: 100%;
     height: auto;
@@ -370,7 +370,7 @@
     justify-content: center;
     background: #000;
   }
-  .viewer.pseudo-fullscreen img {
+  .viewer.pseudo-fullscreen video {
     width: auto;
     height: 100%;
     max-width: 100%;
@@ -611,7 +611,7 @@
         <div class="drilldown">
           <div class="drilldown-main">
             <div class="viewer" id="viewer">
-              <img id="streamImg" alt="live stream">
+              <video id="streamVideo" autoplay muted playsinline></video>
               <div class="loading-overlay" id="loadingOverlay">
                 <span class="spinner"></span>
                 <span id="loadingText">Connecting…</span>
@@ -731,7 +731,7 @@
     const drilldownTitle = document.getElementById('drilldownTitle');
 
     const buttons   = document.querySelectorAll('#drilldownView .stream-btn[data-stream]');
-    const img       = document.getElementById('streamImg');
+    const video     = document.getElementById('streamVideo');
     const viewer    = document.getElementById('viewer');
     const fsBtn     = document.getElementById('fsBtn');
     const fsBackBtn = document.getElementById('fsBackBtn');
@@ -748,8 +748,8 @@
     const titles = { main: 'Main', lores: 'Lores' };
 
     // Track which Pi + stream the drill-down view is watching — both
-    // encoded in the img src URL so the frontend knows which backend and
-    // feed to proxy.
+    // sent as query params to /webrtc/offer so the frontend knows which
+    // backend and feed to relay.
     const urlParams = new URLSearchParams(window.location.search);
     let currentPi     = urlParams.get('pi') || '';
     let currentStream = urlParams.get('stream') || 'main';
@@ -759,18 +759,88 @@
     let pollTimer = null;       // drill-down status polling, only runs while drilled in
     let inDrilldown = false;
 
+    // WebRTC connections. Unlike the old <img src="/stream">, each
+    // viewer (grid tile, drill-down) is a real RTCPeerConnection that
+    // must be explicitly closed — it doesn't just go away when its
+    // backing DOM element is removed, so it needs its own lifecycle
+    // tracking (nothing analogous existed for <img> tags).
+    let drilldownPc = null;         // single connection for the detail view
+    let gridPcs = new Map();        // piName -> RTCPeerConnection, for grid tiles
+
     // ── Sidebar (mobile drawer) ──────────────────────────────────────────
     function openSidebar()  { sidebar.classList.add('open');  overlayBg.classList.add('open'); }
     function closeSidebar() { sidebar.classList.remove('open'); overlayBg.classList.remove('open'); }
     menuToggle.addEventListener('click', openSidebar);
     overlayBg.addEventListener('click', closeSidebar);
 
+    // ── WebRTC signaling ──────────────────────────────────────────────────
+    // Performs the full WHEP-style handshake against this frontend's own
+    // /webrtc/offer?pi=X&stream=Y endpoint (which relays to picam-orchestrator
+    // — see the frontend's own architecture docs) and attaches the
+    // resulting video track to `videoEl`. Non-trickle ICE: gathering runs
+    // to completion before the offer is sent, so this is a single
+    // request/response, no separate signaling channel needed — same
+    // shape as every other endpoint this page already calls.
+    //
+    // `onFailed(pc)` fires once if the connection later drops
+    // (failed/disconnected) — the caller decides what to do (grid tiles
+    // show an "unavailable" placeholder; the drill-down view retries).
+    async function connectWebRTC(piName, stream, videoEl, onFailed) {
+      const pc = new RTCPeerConnection();
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.ontrack = (ev) => { videoEl.srcObject = ev.streams[0]; };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          if (onFailed) onFailed(pc);
+        }
+      };
+
+      await pc.setLocalDescription(await pc.createOffer());
+
+      // Bounded wait, not indefinite — if gathering never reaches
+      // 'complete' for any reason (found the hard way: it can hang
+      // forever in some environments), we proceed with whatever
+      // candidates were gathered in the meantime rather than leaving the
+      // viewer stuck on "Connecting…" with no way to recover. Matches
+      // the backend's own 5s non-trickle gathering timeout.
+      if (pc.iceGatheringState !== 'complete') {
+        await new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            pc.removeEventListener('icegatheringstatechange', check);
+            resolve();
+          }, 5000);
+          function check() {
+            if (pc.iceGatheringState === 'complete') {
+              clearTimeout(timer);
+              pc.removeEventListener('icegatheringstatechange', check);
+              resolve();
+            }
+          }
+          pc.addEventListener('icegatheringstatechange', check);
+        });
+      }
+
+      const resp = await fetch('/webrtc/offer?pi=' + encodeURIComponent(piName) +
+                                '&stream=' + encodeURIComponent(stream), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sdp: pc.localDescription.sdp })
+      });
+      if (!resp.ok) { pc.close(); throw new Error('signaling failed: ' + resp.status); }
+      const data = await resp.json();
+      if (!data.sdp) { pc.close(); throw new Error('no sdp in /webrtc/offer response'); }
+
+      await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
+      return pc;
+    }
+
     // ── View switching: grid <-> drill-down ──────────────────────────────
     function showGrid() {
       inDrilldown = false;
       drilldownView.style.display = 'none';
       gridView.style.display = '';
-      img.src = '';  // stop the drill-down stream connection
+      if (drilldownPc) { drilldownPc.close(); drilldownPc = null; }
+      video.srcObject = null;  // stop showing the last drill-down frame
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
       setPseudoFullscreen(false);  // don't leave the overlay/scroll-lock stuck on
       // Update the URL without a reload, so back/forward + reload land
@@ -850,11 +920,20 @@
 
         // Reachable — show a live Lores thumbnail (small, low bandwidth,
         // appropriate for a grid that may have many tiles at once).
-        const thumbImg = document.createElement('img');
-        thumbImg.alt = pi.label;
-        thumbImg.src = '/stream?pi=' + encodeURIComponent(pi.name) + '&stream=lores';
-        thumbImg.onerror = () => { showUnavailable(thumb); setDot(false); };
-        thumb.appendChild(thumbImg);
+        const thumbVideo = document.createElement('video');
+        thumbVideo.autoplay = true;
+        thumbVideo.muted = true;
+        thumbVideo.playsInline = true;
+        thumb.appendChild(thumbVideo);
+
+        const pc = await connectWebRTC(pi.name, 'lores', thumbVideo, (failedPc) => {
+          if (gridPcs.get(pi.name) !== failedPc) return;  // already superseded/removed
+          gridPcs.delete(pi.name);
+          failedPc.close();
+          showUnavailable(thumb);
+          setDot(false);
+        });
+        gridPcs.set(pi.name, pc);
         setDot(true);
       } catch (e) {
         showUnavailable(thumb);
@@ -872,6 +951,13 @@
     }
 
     async function loadCameraGrid() {
+      // innerHTML='' below only destroys the DOM nodes — it does NOT
+      // close the independently-alive RTCPeerConnections backing them
+      // (nothing analogous was needed for <img> tags). Without this,
+      // every grid refresh would leak a relay connection on
+      // picam-frontend indefinitely.
+      for (const pc of gridPcs.values()) pc.close();
+      gridPcs.clear();
       cameraGrid.innerHTML = '';
       try {
         const resp = await fetch('/pis.json');
@@ -911,10 +997,22 @@
       buttons.forEach(b => b.classList.toggle('active', b.dataset.stream === stream));
     }
 
-    function reloadStream() {
+    async function reloadStream() {
       showLoading();
-      img.src = '/stream?pi=' + encodeURIComponent(currentPi) +
-                '&stream=' + encodeURIComponent(currentStream);
+      if (drilldownPc) { drilldownPc.close(); drilldownPc = null; }
+      try {
+        drilldownPc = await connectWebRTC(currentPi, currentStream, video, (failedPc) => {
+          if (drilldownPc !== failedPc) return;  // superseded by a newer reloadStream() call
+          drilldownPc = null;
+          if (!inDrilldown) return;
+          showLoading();
+          setTimeout(() => { if (inDrilldown) reloadStream(); }, 1000);
+        });
+      } catch (e) {
+        if (!inDrilldown) return;
+        showLoading();
+        setTimeout(() => { if (inDrilldown) reloadStream(); }, 1000);
+      }
     }
 
     function selectStream(stream) {
@@ -922,18 +1020,7 @@
       reloadStream();
     }
     buttons.forEach(b => b.addEventListener('click', () => selectStream(b.dataset.stream)));
-    img.addEventListener('load', hideLoading);
-
-    // On error, reconnect to the same Pi + stream (only while drilled in).
-    img.onerror = () => {
-      if (!inDrilldown) return;
-      showLoading();
-      setTimeout(() => {
-        if (!inDrilldown) return;
-        img.src = '/stream?pi=' + encodeURIComponent(currentPi) +
-                  '&stream=' + encodeURIComponent(currentStream) + '&_=' + Date.now();
-      }, 1000);
-    };
+    video.addEventListener('playing', hideLoading);
 
     // ── Drill-down: Lens (camera 0/1) ─────────────────────────────────────
     function setActiveCamera(cameraId) {
@@ -1093,15 +1180,16 @@
     annotateButtons.forEach(b => b.addEventListener('click', () => toggleAnnotate(b)));
 
     // ── Pseudo-fullscreen ─────────────────────────────────────────────────
-    // Deliberately NOT using the native Fullscreen API. iOS Safari does
-    // not support requestFullscreen() on anything other than <video>
-    // elements — it silently no-ops on a div, which is exactly what our
-    // .viewer is (it wraps an <img>, since the stream renders as a plain
-    // image, not a video element). Rather than special-case iOS with a
-    // different code path, this uses one CSS class (position: fixed, fills the
-    // viewport) on every platform — simpler, and behaves identically
-    // everywhere instead of depending on a native API with inconsistent
-    // browser support.
+    // Deliberately NOT using the native Fullscreen API, even though
+    // .viewer now wraps a real <video> element (it used to wrap an
+    // <img>, back when this was MJPEG/WebP — iOS Safari's
+    // requestFullscreen() only works on <video>, so native fullscreen
+    // wasn't even an option then). It's kept this way on purpose now:
+    // native video fullscreen hides custom overlay controls (the
+    // .fs-btn/.fs-back-btn buttons) on some browsers, and this CSS-class
+    // approach (position: fixed, fills the viewport) already behaves
+    // identically across every platform — not worth the cross-browser
+    // risk to switch for a marginal gain.
     let pseudoFullscreen = false;
 
     function setPseudoFullscreen(on) {

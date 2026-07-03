@@ -4,20 +4,23 @@ Priority: optional
 Maintainer: Jaco Hanekom <jhanekom@gmail.com>
 Build-Depends: debhelper-compat (= 13),
                cmake,
-               pkg-config
+               pkg-config,
+               git,
+               libssl-dev
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
 Package: picam-frontend
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Multi-Pi web viewer for picam-orchestrator backends
+Description: Multi-Pi WebRTC web viewer for picam-orchestrator backends
  Single web UI that can view and switch between multiple picam-orchestrator
- backends (one per Pi) from a single page. Proxies the live multipart
- WebP stream and status JSON through itself as a pure byte relay
- (codec-agnostic — it never decodes or re-encodes frames) — browsers
- never connect directly to any Pi, only to this frontend, which then
- reaches out to whichever backend is currently selected.
+ backends (one per Pi) from a single page. Live video is WebRTC (VP8);
+ since that's peer-to-peer by nature, this process is a small SFU-lite
+ relay for the media path (terminates WebRTC with both the browser and
+ each picam-orchestrator, forwarding raw RTP packets between them — no
+ decode/re-encode) rather than a byte proxy. Status JSON is still a plain
+ proxy. Browsers never connect directly to any Pi, only to this frontend.
  .
  Configure the list of Pis in /etc/picam-frontend/config.ini under
  the [pis] section. Each Pi just needs picam-orchestrator installed and
