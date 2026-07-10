@@ -1,5 +1,10 @@
 # picam-frontend
 
+> **Deprecated.** This C++ implementation is superseded by a from-scratch Go
+> rewrite, [`picam-frontend-go`](../picam-frontend-go), which has the same
+> config file format and HTTP endpoint surface. Use that project instead;
+> this one is kept for reference only.
+
 A web UI for viewing and controlling multiple Raspberry Pi cameras. The browser talks exclusively to picam-frontend, which relays live video (WebRTC) and proxies everything else (status JSON, control commands) to the backend Pis running [picam-orchestrator](https://github.com).
 
 ## Features
